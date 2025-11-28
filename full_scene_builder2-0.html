@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HTML Scene Builder v2.0</title>
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #0d1117;
+        color: #fff;
+        user-select: none;
+        overflow: hidden;
+    }
+    #sidebar {
+        width: 220px;
+        height: 100vh;
+        background: #161b22;
+        position: fixed;
+        left: 0;
+        top: 0;
+        padding: 15px;
+        box-sizing: border-box;
+        overflow-y: auto;
+        border-right: 2px solid #21262d;
+    }
+    #sidebar h2 {
+        margin-top: 0;
+        font-size: 18px;
+        font-weight: bold;
+    }
+    .tool-btn {
+        background: #21262d;
+        padding: 10px;
+        margin-bottom: 8px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: grab;
+    }
+    .tool-btn:hover { background: #30363d }
+
+    #topbar {
+        position: fixed;
+        left: 220px;
+        right: 0;
+        background: #161b22;
+        padding: 10px;
+        display: flex;
+        gap: 10px;
+        border-bottom: 2px solid #21262d;
+    }
+    .top-btn {
+        background: #21262d;
+        padding: 10px 15px;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .top-btn:hover { background: #30363d }
+
+    #workspace {
+        position: fixed;
+        left: 220px;
+        top: 60px;
+        right: 260px;
+        bottom: 0;
+        background: #0d1117;
+        overflow: auto;
+        padding: 20px;
+    }
+    #scene {
+        width: 1200px;
+        height: 700px;
+        margin: auto;
+        background: #fff;
+        position: relative;
+        overflow: hidden;
+        border-radius: 12px;
+    }
+    .item {
+        position: absolute;
+        cursor: move;
+        padding: 5px;
+        box-sizing: border-box;
+    }
+
+    /* Properties panel */
+    #props {
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 260px;
+        height: 100vh;
+        background: #161b22;
+        border-left: 2px solid #21262d;
+        padding: 15px;
+        overflow-y: auto;
+    }
+    #props h3 {
+        margin-top: 0;
+    }
+    input, select {
+        width: 100%;
+        padding: 6px;
+        background: #21262d;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        color: white;
+    }
+    label {
+        font-size: 13px;
+        opacity: .8;
+    }
+
+    .scene-header {
+        position: absolute;
+        top: -40px;
+        left: 0;
+        background: #30363d;
+        padding: 5px 10px;
+        border-radius: 6px 6px 0 0;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+    .scene-header button {
+        border: none;
+        background: #21262d;
+        color: white;
+        padding: 5px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+</style>
+</head>
+<body>
+
+<!-- Left panel -->
+<div id="sidebar">
+    <h2>Tools</h2>
+    <div class="tool-btn" draggable="true" data-type="button">Button</div>
+    <div class="tool-btn" draggable="true" data-type="text">Text</div>
+    <div class="tool-btn" draggable="true" data-type="div">Frame (div)</div>
+    <div class="tool-btn" draggable="true" data-type="img">Image</div>
+    <div class="tool-btn" draggable="true" data-type="input">Text Input</div>
+
+    <br><br>
+
+    <div class="top-btn" id="newSceneBtn">New Scene</div>
+</div>
+
+<!-- Top bar -->
+<div id="topbar">
+    <div class="top-btn" id="copyHtmlBtn">Copy HTML</div>
+    <div class="top-btn" id="previewBtn">Preview</div>
+    <div class="top-btn" id="undoBtn">Undo</div>
+    <div class="top-btn" id="redoBtn">Redo</div>
+</div>
+
+<!-- Workspace -->
+<div id="workspace">
+    <div id="scene"></div>
+</div>
+
+<!-- Properties panel -->
+<div id="props">
+    <h3>Properties</h3>
+    <div id="noSelect">Nothing selected</div>
+    <div id="propFields" style="display:none">
+        <label>Text</label>
+        <input id="propText" placeholder="Enter text">
+
+        <label>Width</label>
+        <input id="propW" placeholder="px">
+
+        <label>Height</label>
+        <input id="propH" placeholder="px">
+
+        <label>Background Color</label>
+        <input id="propBg" placeholder="#000000">
+
+        <label>Text Color</label>
+        <input id="propColor" placeholder="#ffffff">
+
+        <label>Font Size</label>
+        <input id="propFont" placeholder="e.g. 16px">
+    </div>
+</div>
+
+<script>
+let selected = null;
+
+document.querySelectorAll(".tool-btn").forEach(btn => {
+    btn.addEventListener("dragstart", e => {
+        e.dataTransfer.setData("type", btn.dataset.type);
+    });
+});
+
+let scene = document.getElementById("scene");
+
+scene.addEventListener("dragover", e => e.preventDefault());
+
+scene.addEventListener("drop", e => {
+    e.preventDefault();
+    let t = e.dataTransfer.getData("type");
+
+    let el;
+
+    if (t === "button") {
+        el = document.createElement("button");
+        el.textContent = "Button";
+    }
+    if (t === "text") {
+        el = document.createElement("div");
+        el.textContent = "Text";
+    }
+    if (t === "div") {
+        el = document.createElement("div");
+        el.style.border = "2px solid black";
+        el.style.width = "150px";
+        el.style.height = "80px";
+    }
+    if (t === "img") {
+        el = document.createElement("img");
+        el.src = "https://via.placeholder.com/120";
+        el.style.width = "120px";
+    }
+    if (t === "input") {
+        el = document.createElement("input");
+        el.placeholder = "Type here...";
+    }
+
+    el.classList.add("item");
+    el.style.left = e.offsetX + "px";
+    el.style.top = e.offsetY + "px";
+
+    makeDraggable(el);
+    scene.appendChild(el);
+});
+
+function makeDraggable(el) {
+    el.addEventListener("mousedown", e => {
+        selected = el;
+        updateProps();
+
+        let shiftX = e.clientX - el.getBoundingClientRect().left;
+        let shiftY = e.clientY - el.getBoundingClientRect().top;
+
+        function move(e2) {
+            el.style.left = (e2.clientX - shiftX) + "px";
+            el.style.top = (e2.clientY - shiftY) + "px";
+        }
+
+        document.addEventListener("mousemove", move);
+
+        document.addEventListener("mouseup", () => {
+            document.removeEventListener("mousemove", move);
+        }, { once: true });
+    });
+}
+
+function updateProps() {
+    if (!selected) return;
+
+    document.getElementById("noSelect").style.display = "none";
+    document.getElementById("propFields").style.display = "block";
+
+    document.getElementById("propText").value = selected.textContent || "";
+    document.getElementById("propW").value = selected.style.width || "";
+    document.getElementById("propH").value = selected.style.height || "";
+    document.getElementById("propBg").value = selected.style.background || "";
+    document.getElementById("propColor").value = selected.style.color || "";
+    document.getElementById("propFont").value = selected.style.fontSize || "";
+}
+
+document.getElementById("propText").oninput = e => {
+    if (selected) selected.textContent = e.target.value;
+};
+document.getElementById("propW").oninput = e => {
+    if (selected) selected.style.width = e.target.value;
+};
+document.getElementById("propH").oninput = e => {
+    if (selected) selected.style.height = e.target.value;
+};
+document.getElementById("propBg").oninput = e => {
+    if (selected) selected.style.background = e.target.value;
+};
+document.getElementById("propColor").oninput = e => {
+    if (selected) selected.style.color = e.target.value;
+};
+document.getElementById("propFont").oninput = e => {
+    if (selected) selected.style.fontSize = e.target.value;
+};
+
+document.getElementById("copyHtmlBtn").onclick = () => {
+    navigator.clipboard.writeText(scene.outerHTML);
+};
+</script>
+
+</body>
+</html>
