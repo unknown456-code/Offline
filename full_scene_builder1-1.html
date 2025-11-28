@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Full Scene Builder — Full Version</title>
+<style>
+  :root{--panel:#0f1724;--muted:#9aa7b8;--accent:#4f46e5}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;font-family:Inter,Arial,Segoe UI,Roboto;background:linear-gradient(180deg,#071026,#071b2a);color:#e6eef6;display:flex}
+  .sidebar{width:280px;padding:12px;background:var(--panel);border-right:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:10px}
+  .topbar{height:48px;background:transparent;display:flex;align-items:center;gap:8px}
+  .btn{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.03);padding:6px 10px;border-radius:8px;cursor:pointer;color:var(--muted)}
+  .palette{display:flex;flex-direction:column;gap:8px}
+  .pal-item{padding:8px;background:#0b1220;border-radius:6px;cursor:grab;text-align:center}
+  .center{flex:1;display:flex;flex-direction:column}
+  .canvas-toolbar{display:flex;align-items:center;gap:8px;padding:8px}
+  .scenes-list{display:flex;flex-direction:column;gap:6px;overflow:auto;padding:6px;background:rgba(255,255,255,0.01);border-radius:8px}
+  .scene-row{display:flex;align-items:center;gap:6px;padding:6px;border-radius:6px}
+  .scene-row.active{background:rgba(79,70,229,0.12);border:1px solid rgba(79,70,229,0.14)}
+  .canvas-wrap{flex:1;background:#ffffff;display:flex;justify-content:center;align-items:center;padding:12px}
+  .stage{width:980px;height:560px;background:#f8fafc;position:relative;overflow:hidden;border-radius:8px;border:1px solid #dbe7f3;box-shadow:0 8px 20px rgba(2,6,23,0.4)}
+  .elem{position:absolute;display:flex;align-items:center;justify-content:center;cursor:move;user-select:none}
+  .elem.selected{outline:2px dashed rgba(79,70,229,0.8)}
+  .props{width:340px;padding:12px;background:var(--panel);display:flex;flex-direction:column;gap:10px}
+  label{font-size:13px;color:var(--muted)}
+  input[type=text], input[type=number], select, textarea{width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+  .row{display:flex;gap:8px}
+  .small{font-size:13px;color:var(--muted)}
+  .handles{position:absolute;pointer-events:none}
+  .handle{width:10px;height:10px;position:absolute;background:rgba(0,0,0,0.6);border:2px solid #fff;border-radius:2px;pointer-events:auto}
+  .h-tl{left:-6px;top:-6px;cursor:nwse-resize}
+  .h-tr{right:-6px;top:-6px;cursor:nesw-resize}
+  .h-bl{left:-6px;bottom:-6px;cursor:nesw-resize}
+  .h-br{right:-6px;bottom:-6px;cursor:nwse-resize}
+  .grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px)}
+  .controls-row{display:flex;gap:8px;align-items:center}
+  .footer{padding:8px;text-align:center;color:var(--muted);font-size:13px}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="topbar"><strong>Elements</strong><div style="margin-left:auto" class="small">v1.1</div></div>
+
+    <div class="palette">
+      <div class="pal-item" draggable="true" data-type="button">Button</div>
+      <div class="pal-item" draggable="true" data-type="text">Text</div>
+      <div class="pal-item" draggable="true" data-type="box">Frame</div>
+      <div class="pal-item" draggable="true" data-type="image">Image</div>
+      <div class="pal-item" draggable="true" data-type="input">Text Input</div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="addScene" class="btn">New Scene</button>
+      <button id="exportAll" class="btn">Export All</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+      <label class="small">Grid</label>
+      <input id="snapToggle" type="checkbox" />
+      <input id="gridSize" type="number" value="10" style="width:64px" />
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+      <div class="small">Scenes</div>
+      <div class="scenes-list" id="scenesList"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="undoBtn" class="btn">Undo</button>
+      <button id="redoBtn" class="btn">Redo</button>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button id="saveSceneHtml" class="btn">Save .html</button>
+      <label class="btn" for="importFile">Import .html</label>
+      <input id="importFile" type="file" accept="text/html" />
+    </div>
+
+  </aside>
+
+  <div class="center">
+    <div class="canvas-toolbar">
+      <div class="controls-row">
+        <button id="copyHtml" class="btn">Copy HTML</button>
+        <button id="previewWin" class="btn">Open Preview</button>
+        <button id="deleteElem" class="btn">Delete Element</button>
+      </div>
+      <div style="margin-left:auto" class="small">Drag elements right →</div>
+    </div>
+
+    <div class="canvas-wrap">
+      <div id="stageContainer" style="position:relative">
+        <div id="stageGrid" class="grid" style="display:none"></div>
+        <div id="stage" class="stage" tabindex="0"></div>
+      </div>
+    </div>
+
+    <div class="footer">Full-featured editor: Drag, edit, resize, snap-to-grid, undo/redo, export.</div>
+  </div>
+
+  <aside class="props" id="propsPanel">
+    <div><strong>Properties</strong></div>
+    <div id="noSel" class="small">None selected</div>
+
+    <div id="props" style="display:none;flex-direction:column;gap:8px">
+      <label>Type <select id="propType"><option>button</option><option>text</option><option>box</option><option>image</option><option>input</option></select></label>
+      <label>Text <input id="propText" type="text" placeholder="Enter text here"/></label>
+      <label>Width / Height (px) <div class="row"><input id="propW" type="number"/><input id="propH" type="number"/></div></label>
+      <label>Position X / Y (px) <div class="row"><input id="propX" type="number"/><input id="propY" type="number"/></div></label>
+      <label>Background (hex or empty) <input id="propBg" type="text" placeholder="#000000"/></label>
+      <label>Text Color <input id="propColor" type="text" placeholder="#ffffff"/></label>
+      <label>Border Radius (px) <input id="propRadius" type="number"/></label>
+      <label>Font <select id="propFont"><option>Inter, system-ui</option><option>Arial</option><option>Courier New</option><option>Times New Roman</option></select></label>
+      <label>Image Source (for image) <input id="propSrc" type="text" placeholder="https://..."/></label>
+      <div style="display:flex;gap:8px">
+        <button id="applyBtn" class="btn">Apply</button>
+        <button id="bringForward" class="btn">Bring Forward</button>
+        <button id="sendBack" class="btn">Send Back</button>
+      </div>
+    </div>
+
+    <div style="margin-top:auto">
+      <div style="display:flex;gap:8px">
+        <input id="sceneName" type="text" placeholder="Scene Name" />
+        <button id="saveScene" class="btn">Save</button>
+      </div>
+    </div>
+  </aside>
+
+<script>
+// All messages, alerts, and placeholders are in English
+document.getElementById('copyHtml').addEventListener('click', async ()=>{
+  const s = scenesFind(); if(!s) return;
+  const html = buildHtmlForScene(s);
+  await navigator.clipboard.writeText(html);
+  alert('Scene HTML copied to clipboard');
+});
+
+document.getElementById('importFile').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    const txt = reader.result;
+    const container = document.createElement('div'); container.innerHTML = txt;
+    const body = container.querySelector('.container') || container.querySelector('body') || container;
+    const newScene = { id: uid(), name: f.name.replace(/\.html?$/i,''), elements: [] };
+    const nodes = body.querySelectorAll('button,p,div,img,input');
+    nodes.forEach(n=>{
+      const style = n.getAttribute('style') || '';
+      const props = {};
+      style.split(';').forEach(pair=>{ const [k,v]=pair.split(':'); if(!k) return; props[k.trim()]= (v||'').trim(); });
+      const left = parseInt(props.left||'0'); const top = parseInt(props.top||'0');
+      const width = parseInt(props.width||'100'); const height = parseInt(props.height||'30');
+      const type = n.tagName.toLowerCase()==='button'?'button': n.tagName.toLowerCase()==='p'?'text': n.tagName.toLowerCase()==='img'?'image': n.tagName.toLowerCase()==='input'?'input':'box';
+      const el = { id: uid(), type, left, top, width, height, text: n.textContent||'', styles:{ background: props.background||'', color: props.color||'', borderRadius: parseInt(props['border-radius']||'0')||0, fontFamily: props['font-family']||'' }, src: n.getAttribute('src')||'' };
+      newScene.elements.push(el);
+    });
+    pushUndo(); scenes.unshift(newScene); activeSceneId = newScene.id; saveScenes(); renderScenesList(); renderScene(); alert('Imported scene: '+newScene.name);
+  };
+  reader.readAsText(f);
+});
+</script>
+</body>
+</html>
