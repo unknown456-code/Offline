@@ -1,0 +1,475 @@
+<!DOCTYPE html> 
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bloxstrap GUI Editor - Ultimate with Sliders</title>
+<style>
+  body { 
+    font-family: Arial; 
+    display: flex; 
+    height: 100vh; 
+    margin: 0; 
+    background: linear-gradient(135deg,#1a1a1a,#333); 
+    color: #fff;
+  }
+  #editor { 
+    width: 380px; 
+    padding: 20px; 
+    border-right: 1px solid #555; 
+    overflow-y: auto; 
+    background: rgba(0,0,0,0.7); 
+    backdrop-filter: blur(10px); 
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  }
+  #preview { 
+    flex: 1; 
+    position: relative; 
+    overflow: hidden; 
+    background: rgba(0,0,0,0.5); 
+    backdrop-filter: blur(5px); 
+  }
+  .element { 
+    position: absolute; 
+    border: 1px dashed #999; 
+    padding: 2px; 
+    cursor: move; 
+    text-align:center; 
+    transition: 0.2s all;
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .selected { 
+    border-color: red; 
+  }
+  label { 
+    display:block; 
+    margin-top:5px; 
+    font-size:14px; 
+    color: #ddd;
+  }
+  input, select, textarea { 
+    width: 100%; 
+    margin-bottom:5px; 
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #fff;
+    padding: 6px;
+    box-sizing: border-box;
+  }
+  input[type=range] { 
+    width: 100%; 
+  }
+  button { 
+    margin: 6px 0; 
+    width: 100%; 
+    background: #000; 
+    color: #ff0033; 
+    font-weight: bold; 
+    text-shadow: 0 0 5px #ff0033, 0 0 10px #ff0033, 0 0 20px #ff0033; 
+    border: none; 
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: 0.2s all;
+  }
+  button:hover { 
+    box-shadow: 0 0 15px #ff0033, 0 0 30px #ff0033, 0 0 45px #ff0033; 
+  }
+  #previewCorner {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    width: 200px;
+    height: 150px;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(5px);
+    border: 1px solid #ff0033;
+    padding: 5px;
+    overflow: hidden;
+    z-index: 1000;
+  }
+  #previewCorner h4 {
+    margin: 0;
+    font-size: 14px;
+    text-align: center;
+    color: #fff;
+  }
+  #miniPreview {
+    position: relative;
+    width: 100%;
+    height: calc(100% - 20px);
+    background: #111;
+  }
+  /* небольшой стиль для подсказки внизу */
+  .hint { font-size:12px; color:#bbb; margin-top:6px; }
+</style>
+</head>
+<body>
+
+<div id="editor">
+  <h2>Bloxstrap GUI Editor Ultimate</h2>
+
+  <h3>Тема окна</h3>
+  <select id="theme" onchange="setTheme(this.value)">
+    <option value="Default">Default</option>
+    <option value="Dark">Dark</option>
+  </select>
+
+  <h3>Добавить элемент</h3>
+  <button onclick="addElement('TextBlock')">TextBlock</button>
+  <button onclick="addElement('Button')">Button</button>
+  <button onclick="addElement('Image')">Roblox Icon</button>
+  <button onclick="addElement('ProgressBar')">ProgressBar</button>
+  <button onclick="applyRandomStyle()">Random Style</button>
+
+  <h3>Свойства выбранного элемента</h3>
+  <div id="props">Выберите элемент</div>
+
+  <h3>Кнопки окна</h3>
+  <label>Cancel Button Text: <input type="text" id="cancelText" value="Cancel" oninput="generateCode()"></label>
+  <label>Close Button Text: <input type="text" id="closeText" value="Close" oninput="generateCode()"></label>
+
+  <h3>Сохранение / Загрузка проекта</h3>
+  <button onclick="saveProject()">Сохранить проект</button>
+  <input type="file" id="loadFile" onchange="loadProject(event)">
+
+  <h3>Сгенерированный код</h3>
+  <textarea id="code" rows="8" style="width:100%;"></textarea>
+
+  <div class="hint">Hotkeys: Ctrl+Z undo, Ctrl+Y redo, Delete remove, Ctrl+D duplicate</div>
+</div>
+
+<div id="preview"></div>
+
+<!-- Mini preview -->
+<div id="previewCorner">
+  <h4>Preview</h4>
+  <div id="miniPreview"></div>
+</div>
+
+<script>
+let elements = [];
+let selected = null;
+let theme = 'Default';
+let history = [];
+let future = [];
+
+/* --- helper: create inline Roblox-like SVG icon (30x30) --- */
+function createRobloxSVG(size = 30) {
+  // простая стилизованная "иконка" — куб/рамка для примера
+  const xmlns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(xmlns, "svg");
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+  svg.setAttribute("viewBox", "0 0 100 100");
+  // фон
+  const rect = document.createElementNS(xmlns, "rect");
+  rect.setAttribute("x", "5");
+  rect.setAttribute("y", "5");
+  rect.setAttribute("width", "90");
+  rect.setAttribute("height", "90");
+  rect.setAttribute("rx", "12");
+  rect.setAttribute("fill", "#e84c4c"); // красноватый тон
+  svg.appendChild(rect);
+  // "отверстие" в центре (как у логотипа)
+  const hole = document.createElementNS(xmlns, "rect");
+  hole.setAttribute("x", "32");
+  hole.setAttribute("y", "32");
+  hole.setAttribute("width", "36");
+  hole.setAttribute("height", "36");
+  hole.setAttribute("rx", "6");
+  hole.setAttribute("fill", "#111");
+  svg.appendChild(hole);
+  return svg;
+}
+
+/* --- Добавление элемента --- */
+function addElement(type) {
+  // если Image — мы добавляем иконку Roblox (без URL)
+  if(type === 'Image') {
+    const el = { type: 'Image', x: 50, y: 50, width: 30, height: 30, text: 'Roblox Icon', color: '#ff0033', icon: 'roblox' };
+    elements.push(el);
+    saveHistory();
+    renderPreview();
+    selectElement(el);
+    return;
+  }
+  const el = { type, x:50, y:50, width:type==='ProgressBar'?300:100, height:type==='ProgressBar'?20:30, text:type, color:'#ff0033', icon: null };
+  elements.push(el);
+  saveHistory();
+  renderPreview();
+  selectElement(el);
+}
+
+/* --- Рендер превью --- */
+function renderPreview() {
+  const preview = document.getElementById('preview');
+  preview.innerHTML = '';
+  preview.style.background = theme === 'Dark' ? '#222' : '#f0f0f0';
+
+  elements.forEach(el => {
+    const div = document.createElement('div');
+    div.className = 'element';
+    if(el === selected) div.classList.add('selected');
+    div.style.left = el.x + 'px';
+    div.style.top = el.y + 'px';
+    div.style.width = el.width + 'px';
+    div.style.height = el.height + 'px';
+    div.style.color = el.color;
+    div.style.lineHeight = el.height + 'px';
+    div.style.background = theme === 'Dark' ? 'rgba(50,50,50,0.5)' : 'rgba(255,255,255,0.5)';
+    div.style.borderRadius = '6px';
+
+    if(el.type === 'Image' && el.icon === 'roblox') {
+      // встроенная SVG-иконка Roblox (30x30)
+      div.innerHTML = '';
+      const svg = createRobloxSVG(Math.max(6, Math.min(30, el.width)));
+      // чтобы svg центровался и был нужного размера
+      svg.style.width = Math.max(6, el.width) + 'px';
+      svg.style.height = Math.max(6, el.height) + 'px';
+      div.appendChild(svg);
+    } else if(el.type === 'ProgressBar') {
+      // простая визуализация бара
+      const bar = document.createElement('div');
+      bar.style.width = '100%';
+      bar.style.height = '100%';
+      bar.style.background = '#222';
+      bar.style.borderRadius = '4px';
+      bar.innerText = '';
+      div.innerHTML = '';
+      div.appendChild(bar);
+    } else {
+      div.innerText = el.text;
+    }
+
+    div.onmousedown = e => { e.stopPropagation(); dragStart(e, el); selectElement(el); };
+    preview.appendChild(div);
+  });
+
+  generateCode();
+  updateMiniPreview();
+}
+
+/* --- Выбор элемента и показ свойств --- */
+function selectElement(el) {
+  selected = el;
+  const props = document.getElementById('props');
+  if(!el) { props.innerHTML = 'Выберите элемент'; return; }
+
+  // Для Image (Roblox icon) — убираем поле для URL, показываем только позицию/размер/цвет (цвет можно оставить)
+  if(el.type === 'Image' && el.icon === 'roblox') {
+    props.innerHTML = `
+      <label>X: <input type="number" value="${el.x}" oninput="updateProp('x', this.value)"></label>
+      <label>Y: <input type="number" value="${el.y}" oninput="updateProp('y', this.value)"></label>
+      <label>Width: <input type="range" min="6" max="200" value="${el.width}" oninput="updateProp('width', this.value)"> ${el.width}px</label>
+      <label>Height: <input type="range" min="6" max="200" value="${el.height}" oninput="updateProp('height', this.value)"> ${el.height}px</label>
+      <label>Color: <input type="color" value="${el.color}" oninput="updateProp('color', this.value)"></label>
+      <button onclick="deleteElement()">Удалить элемент</button>
+    `;
+    return;
+  }
+
+  // Обычные элементы
+  props.innerHTML = `
+    <label>X: <input type="number" value="${el.x}" oninput="updateProp('x', this.value)"></label>
+    <label>Y: <input type="number" value="${el.y}" oninput="updateProp('y', this.value)"></label>
+    <label>Width: <input type="range" min="10" max="600" value="${el.width}" oninput="updateProp('width', this.value)"> ${el.width}px</label>
+    <label>Height: <input type="range" min="10" max="400" value="${el.height}" oninput="updateProp('height', this.value)"> ${el.height}px</label>
+    <label>Text: <input type="text" value="${el.text}" oninput="updateProp('text', this.value)"></label>
+    <label>Color: <input type="color" value="${el.color}" oninput="updateProp('color', this.value)"></label>
+    <button onclick="deleteElement()">Удалить элемент</button>
+  `;
+}
+
+/* --- Обновление свойства --- */
+function updateProp(prop, value) {
+  if(!selected) return;
+  if(['x','y','width','height'].includes(prop)) selected[prop] = parseInt(value);
+  else selected[prop] = value;
+  saveHistory();
+  renderPreview();
+}
+
+/* --- Удаление элемента --- */
+function deleteElement() {
+  if(!selected) return;
+  elements = elements.filter(e => e !== selected);
+  selected = null;
+  saveHistory();
+  renderPreview();
+  document.getElementById('props').innerHTML = 'Выберите элемент';
+}
+
+/* --- Генерация кода (без URL для Image) --- */
+function generateCode() {
+  let code = `<BloxstrapCustomBootstrapper Version="1" Height="400" Width="600" Theme="${theme}">\n`;
+  const cancelText = document.getElementById('cancelText').value;
+  const closeText = document.getElementById('closeText').value;
+  code += `  <Button Name="CancelButton" Content="${cancelText}" HorizontalAlignment="Right" Margin="0,345,20,0" Width="100" Height="30" />\n`;
+  code += `  <Button Name="CloseButton" Content="${closeText}" HorizontalAlignment="Right" Margin="0,380,20,0" Width="100" Height="30" />\n`;
+
+  elements.forEach(el => {
+    code += `  <${el.type} `;
+    if(el.type === 'TextBlock' || el.type === 'Button') code += `Text="${el.text}" `;
+    if(el.type === 'ProgressBar') code += `Width="${el.width}" Height="${el.height}" Foreground="${el.color}" `;
+    if(el.type === 'Image') {
+      // для Roblox-иконки не записываем URL — отмечаем как специальный источник
+      code += `Source="RobloxIcon" Width="${el.width}" Height="${el.height}" `;
+    }
+    code += `HorizontalAlignment="Left" Margin="${el.x},${el.y},0,0" />\n`;
+  });
+
+  code += `</BloxstrapCustomBootstrapper>`;
+  document.getElementById('code').value = code;
+}
+
+/* --- Mini preview (правый нижний) --- */
+function updateMiniPreview() {
+  const mini = document.getElementById('miniPreview');
+  mini.innerHTML = '';
+  elements.forEach(el => {
+    const div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.left = (el.x / 3) + 'px';
+    div.style.top = (el.y / 3) + 'px';
+    div.style.width = (el.width / 3) + 'px';
+    div.style.height = (el.height / 3) + 'px';
+    div.style.background = el.type === 'Image' ? 'transparent' : el.color;
+    div.style.color = '#fff';
+    div.style.fontSize = '8px';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.justifyContent = 'center';
+    if(el.type === 'Image' && el.icon === 'roblox') {
+      // маленькая версия SVG
+      const svg = createRobloxSVG( Math.max(6, Math.min(20, el.width/3)) );
+      svg.style.width = Math.max(6, el.width/3) + 'px';
+      svg.style.height = Math.max(6, el.height/3) + 'px';
+      div.appendChild(svg);
+    } else if(el.type === 'TextBlock' || el.type === 'Button') {
+      div.innerText = el.text;
+    }
+    mini.appendChild(div);
+  });
+}
+
+/* --- Random style --- */
+function applyRandomStyle() {
+  if(!selected) return;
+  const colors = ['#ff0033','#00ffcc','#ffff00','#ff9900','#66ff66'];
+  const randomColor = colors[Math.floor(Math.random()*colors.length)];
+  selected.color = randomColor;
+  saveHistory();
+  renderPreview();
+}
+
+/* --- Drag & drop --- */
+let offsetX, offsetY;
+function dragStart(e, el) {
+  offsetX = e.clientX - el.x;
+  offsetY = e.clientY - el.y;
+  document.onmousemove = ev => dragMove(ev, el);
+  document.onmouseup = dragEnd;
+}
+function dragMove(e, el) {
+  el.x = e.clientX - offsetX;
+  el.y = e.clientY - offsetY;
+  renderPreview();
+}
+function dragEnd() { document.onmousemove = null; document.onmouseup = null; }
+
+/* --- Смена темы --- */
+function setTheme(t) { theme = t; renderPreview(); }
+
+/* --- Сброс выбора --- */
+document.getElementById('preview').onclick = () => { selected = null; selectElement(null); };
+
+/* --- Undo/Redo History --- */
+function saveHistory() {
+  try {
+    history.push(JSON.stringify(elements));
+    if(history.length > 100) history.shift();
+    future = [];
+  } catch (e) { /* ignore */ }
+}
+function undo() {
+  if(history.length < 2) return;
+  future.push(history.pop());
+  elements = JSON.parse(history[history.length - 1]);
+  selected = null;
+  renderPreview();
+}
+function redo() {
+  if(future.length === 0) return;
+  const next = future.pop();
+  elements = JSON.parse(next);
+  history.push(next);
+  selected = null;
+  renderPreview();
+}
+
+/* --- Duplicate --- */
+function duplicateElement() {
+  if(!selected) return;
+  const copy = JSON.parse(JSON.stringify(selected));
+  copy.x = (copy.x || 0) + 10;
+  copy.y = (copy.y || 0) + 10;
+  elements.push(copy);
+  saveHistory();
+  renderPreview();
+}
+
+/* --- Keyboard shortcuts --- */
+document.addEventListener('keydown', e=>{
+  if(e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+  if(e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+  if(e.key === 'Delete') { e.preventDefault(); deleteElement(); }
+  if(e.ctrlKey && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateElement(); }
+});
+
+/* --- Сохранение проекта --- */
+function saveProject() {
+  const data = { elements, theme, cancel: document.getElementById('cancelText').value, close: document.getElementById('closeText').value };
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bloxstrap_project.json';
+  a.click();
+}
+
+/* --- Загрузка проекта --- */
+function loadProject(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const data = JSON.parse(e.target.result);
+    // При загрузке — если в проекте есть Image с URL — мы игнорируем URL и оставляем icon если нет
+    elements = (data.elements || []).map(item=>{
+      if(item.type === 'Image') {
+        // сохраняем только структуру и не переносим URL в текст
+        return { type: 'Image', x: item.x || 50, y: item.y || 50, width: item.width || 30, height: item.height || 30, text: 'Roblox Icon', color: item.color || '#ff0033', icon: 'roblox' };
+      }
+      return item;
+    });
+    theme = data.theme || 'Default';
+    document.getElementById('theme').value = theme;
+    document.getElementById('cancelText').value = data.cancel || 'Cancel';
+    document.getElementById('closeText').value = data.close || 'Close';
+    saveHistory();
+    renderPreview();
+  };
+  reader.readAsText(file);
+}
+
+/* --- Инициалный рендер --- */
+saveHistory();
+renderPreview();
+
+</script>
+</body>
+</html>
